@@ -57,4 +57,10 @@ public class AuthController {
             );
         }
     }
+
+
+    @PostMapping("/validateToken")
+    public Boolean validateToken(@RequestBody ValidateTokenDto validateTokenDto) {
+       return authService.validateToken(validateTokenDto.getUserId(), validateTokenDto.getToken());
+    }
 }
