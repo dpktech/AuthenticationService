@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>org.example</groupId>
-    <artifactId>UserAuthenticationService_Sept2024</artifactId>
+    <artifactId>UserAuthenticationService</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>UserAuthenticationService_Sept2024</name>
-    <description>UserAuthenticationService_Sept2024</description>
+    <name>UserAuthenticationService</name>
+    <description>UserAuthenticationService</description>
     <url/>
     <licenses>
         <license/>
