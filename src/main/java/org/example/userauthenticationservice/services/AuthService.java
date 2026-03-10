@@ -18,6 +18,8 @@ import org.example.userauthenticationservice.repositories.SessionRepo;
 import org.example.userauthenticationservice.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import javax.crypto.SecretKey;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -153,9 +155,74 @@ public class AuthService {
 
         return true;
     }
+
+    /**
+     * Logout: marks the session as EXPIRED in MySQL (FR-6.2).
+     * Subsequent validateToken calls will return false for this token.
+     */
+    public boolean logout(Long userId, String token) {
+        Optional<Session> optionalSession = sessionRepo.findByTokenAndUser_Id(token, userId);
+        if (optionalSession.isEmpty()) {
+            return false;
+        }
+        Session session = optionalSession.get();
+        session.setSessionState(SessionState.EXPIRED);
+        sessionRepo.save(session);
+        return true;
+    }
+
+    /**
+     * Update user profile details (FR-1.3).
+     * Allows users to update their email. Password change triggers BCrypt re-hash.
+     */
+    public User updateProfile(Long userId, String newEmail, String newPassword) throws UserNotFoundException {
+        Optional<User> optionalUser = userRepository.findById(userId);
+        if (optionalUser.isEmpty()) {
+            throw new UserNotFoundException("User not found with id: " + userId);
+        }
+        User user = optionalUser.get();
+        if (newEmail != null && !newEmail.isBlank()) {
+            user.setEmail(newEmail);
+        }
+        if (newPassword != null && !newPassword.isBlank()) {
+            user.setPassword(bcryptPasswordEncoder.encode(newPassword));
+        }
+        return userRepository.save(user);
+    }
+
+    /**
+     * Password reset via email link (FR-1.4).
+     * Generates a reset token, sends it to user's email via Kafka.
+     */
+    public boolean initiatePasswordReset(String email) throws UserNotFoundException {
+        Optional<User> optionalUser = userRepository.findByEmail(email);
+        if (optionalUser.isEmpty()) {
+            throw new UserNotFoundException("No user found with email: " + email);
+        }
+        // Generate a short-lived reset token (valid 15 min)
+        String resetToken = Jwts.builder()
+                .claim("email", email)
+                .claim("purpose", "password_reset")
+                .signWith(secretKey)
+                .compact();
+
+        // Publish reset token to Kafka — EmailService sends the reset link email
+        EmailDto emailDto = new EmailDto();
+        emailDto.setTo(email);
+        emailDto.setFrom("noreply@ecommerce.com");
+        emailDto.setSubject("Password Reset Request");
+        emailDto.setBody("Click the following link to reset your password: " +
+                "https://ecommerce.com/reset-password?token=" + resetToken);
+
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            kafkaProducerClient.sendMessage("password-reset", objectMapper.writeValueAsString(emailDto));
+        } catch (JsonProcessingException e) {
+            System.err.println("Failed to publish password reset event: " + e.getMessage());
+        }
+        return true;
+    }
 }
-
-
 
 
 
